@@ -1,0 +1,69 @@
+################################
+# OS / Editor
+################################
+.DS_Store
+.DS_Store?
+Thumbs.db
+.vscode/
+.idea/
+
+################################
+# Python
+################################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+venv/
+.env/
+*.log
+
+################################
+# Python build / cache
+################################
+build/
+dist/
+*.egg-info/
+
+################################
+# Machine Learning Artifacts
+################################
+*.pth
+*.pt
+*.onnx
+
+################################
+# DATASETS (DO NOT UPLOAD)
+################################
+als/
+f/
+m/
+fc/
+mc/
+data/audio/
+data/audio_filtered/
+uploads/
+
+################################
+# Node / MERN
+################################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env.local
+.env.development
+.env.production
+
+################################
+# Jupyter / Notebooks
+################################
+.ipynb_checkpoints/
+
+################################
+# Temporary / Scripts
+################################
+tmp/
+temp/
+

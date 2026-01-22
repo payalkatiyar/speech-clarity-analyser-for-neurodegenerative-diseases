@@ -1,0 +1,16 @@
+Week 2 -
+
+Dataset Preparation -
+Classify datasets in the structure data-audio-train/test-dysarthric/normal-arraymic/headmic.
+"prepare_dataset.py" uses als folder which contains raw data and splits them in a 70:30 ratio of using the audio samples from a headmic(clearer closer audio) and arraymic(distant and vague audio).
+The 70:30 split will help in training the model to be more perceptible to noisy audio inputs without taking noise as a parameter for evaluation of clarity scores.
+ 
+Run the "prepare_dataset.py" script once to split the data, if a rerun is still needed remove the directory data/audio, make the directory structure again using - 
+mkdir -p data/audio/train/{normal,dysarthric}/{headmic,arraymic}
+mkdir -p data/audio/test/{normal,dysarthric}/headmic
+
+then rerun the script.
+Week 2 - split the refined dataset efficiently further to be used in training the model optimally.
+
+Week 3 -
+do not rerun - clean_audio.py, 
