@@ -13,4 +13,4 @@ then rerun the script.
 Week 2 - split the refined dataset efficiently further to be used in training the model optimally.
 
 Week 3 -
-do not rerun - clean_audio.py (removes silent files, and trims silences)
+do not rerun - clean_audio.py , audio_processing.py (removes silent files, and trims silences)
