@@ -2,10 +2,12 @@ import os
 import shutil
 import random
 
+# ================= CONFIG =================
 RAW_ROOT = "als"
 TARGET_ROOT = "data/audio"
-TRAIN_SPLIT = 0.8
-ARRAYMIC_RATIO = 0.3
+
+TRAIN_SPLIT = 0.8          # speaker-level split
+ARRAYMIC_RATIO = 0.3       # % of headmic count
 SEED = 42
 
 random.seed(SEED)
@@ -17,7 +19,12 @@ LABEL_MAP = {
     "MC": "normal"
 }
 
-# Create target directories
+MIC_FOLDERS = {
+    "headmic": "wav_headMic",
+    "arraymic": "wav_arrayMic"
+}
+
+# ================= CREATE TARGET DIRS =================
 for split in ["train", "test"]:
     for label in ["normal", "dysarthric"]:
         os.makedirs(f"{TARGET_ROOT}/{split}/{label}/headmic", exist_ok=True)
@@ -26,67 +33,100 @@ for split in ["train", "test"]:
 
 print("✔ Target directories created")
 
-# Process dataset
+# ================= PROCESS EACH GROUP =================
 for group, label in LABEL_MAP.items():
     group_path = os.path.join(RAW_ROOT, group)
     if not os.path.isdir(group_path):
         continue
 
-    headmic_files = []
-    arraymic_files = []
+    speakers = [
+        s for s in os.listdir(group_path)
+        if os.path.isdir(os.path.join(group_path, s))
+    ]
 
-    for speaker in os.listdir(group_path):
-        speaker_path = os.path.join(group_path, speaker)
-        if not os.path.isdir(speaker_path):
-            continue  # skips .DS_Store safely
+    random.shuffle(speakers)
+    split_idx = int(len(speakers) * TRAIN_SPLIT)
 
-        for session in os.listdir(speaker_path):
-            session_path = os.path.join(speaker_path, session)
-            if not os.path.isdir(session_path):
-                continue
+    train_speakers = speakers[:split_idx]
+    test_speakers = speakers[split_idx:]
 
-            headmic_path = os.path.join(session_path, "wav_headMic")
-            arraymic_path = os.path.join(session_path, "wav_arrayMic")
+    def process_speakers(speaker_list, split):
+        headmic_count = 0
+        arraymic_files = []
 
-            if os.path.isdir(headmic_path):
-                for f in os.listdir(headmic_path):
-                    if f.endswith(".wav"):
-                        headmic_files.append(
-                            (os.path.join(headmic_path, f), f"{speaker}_{f}")
+        for speaker in speaker_list:
+            speaker_path = os.path.join(group_path, speaker)
+
+            for session in os.listdir(speaker_path):
+                if not session.lower().startswith("session"):
+                    continue
+
+                session_path = os.path.join(speaker_path, session)
+
+                # -------- HeadMic --------
+                headmic_path = os.path.join(
+                    session_path, MIC_FOLDERS["headmic"]
+                )
+                if os.path.isdir(headmic_path):
+                    for wav in os.listdir(headmic_path):
+                        if not wav.endswith(".wav"):
+                            continue
+
+                        src = os.path.join(headmic_path, wav)
+                        dst = os.path.join(
+                            TARGET_ROOT,
+                            split,
+                            label,
+                            "headmic",
+                            f"{speaker}_{session}_{wav}"
                         )
+                        shutil.copy(src, dst)
+                        headmic_count += 1
 
-            if os.path.isdir(arraymic_path):
-                for f in os.listdir(arraymic_path):
-                    if f.endswith(".wav"):
-                        arraymic_files.append(
-                            (os.path.join(arraymic_path, f), f"{speaker}_{f}")
-                        )
+                # -------- ArrayMic (train only) --------
+                if split == "train":
+                    arraymic_path = os.path.join(
+                        session_path, MIC_FOLDERS["arraymic"]
+                    )
+                    if os.path.isdir(arraymic_path):
+                        for wav in os.listdir(arraymic_path):
+                            if wav.endswith(".wav"):
+                                arraymic_files.append(
+                                    (
+                                        os.path.join(arraymic_path, wav),
+                                        f"{speaker}_{session}_{wav}"
+                                    )
+                                )
 
-    random.shuffle(headmic_files)
-    split_idx = int(len(headmic_files) * TRAIN_SPLIT)
+        # Limit arraymic usage (robustness without domination)
+        if split == "train":
+            random.shuffle(arraymic_files)
+            max_array = int(headmic_count * ARRAYMIC_RATIO)
 
-    train_headmic = headmic_files[:split_idx]
-    test_headmic = headmic_files[split_idx:]
+            for src, name in arraymic_files[:max_array]:
+                dst = os.path.join(
+                    TARGET_ROOT,
+                    "train",
+                    label,
+                    "arraymic",
+                    name
+                )
+                shutil.copy(src, dst)
 
-    # Copy headmic (train + test)
-    for src, name in train_headmic:
-        shutil.copy(src, f"{TARGET_ROOT}/train/{label}/headmic/{name}")
+            return headmic_count, max_array
 
-    for src, name in test_headmic:
-        shutil.copy(src, f"{TARGET_ROOT}/test/{label}/headmic/{name}")
+        return headmic_count, 0
 
-    # Copy limited arraymic (train only)
-    random.shuffle(arraymic_files)
-    max_array = int(len(train_headmic) * ARRAYMIC_RATIO)
-
-    for src, name in arraymic_files[:max_array]:
-        shutil.copy(src, f"{TARGET_ROOT}/train/{label}/arraymic/{name}")
+    train_head, train_array = process_speakers(train_speakers, "train")
+    test_head, _ = process_speakers(test_speakers, "test")
 
     print(
         f"✔ {label.upper()} | "
-        f"HeadMic train: {len(train_headmic)}, "
-        f"HeadMic test: {len(test_headmic)}, "
-        f"ArrayMic train: {max_array}"
+        f"Train speakers: {len(train_speakers)}, "
+        f"Test speakers: {len(test_speakers)}, "
+        f"HeadMic train: {train_head}, "
+        f"HeadMic test: {test_head}, "
+        f"ArrayMic train: {train_array}"
     )
 
-print("\n🎉 Dataset preparation completed successfully!")
+print("\n🎉 Dataset preparation completed successfully (speaker-safe)")

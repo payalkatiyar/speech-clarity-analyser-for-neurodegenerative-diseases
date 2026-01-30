@@ -17,3 +17,4 @@ Week 2 - split the refined dataset efficiently further to be used in training th
 
 Week 3 -
 do not rerun - clean_audio.py , audio_processing.py (removes silent files, and trims silences)
+initial model training with probability funtion

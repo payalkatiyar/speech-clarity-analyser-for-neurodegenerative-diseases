@@ -6,25 +6,30 @@ from scipy.signal import butter, lfilter
 
 # ================= CONFIG =================
 SAMPLE_RATE = 16000
-MIN_DURATION = 0.5        # seconds
+
+MIN_DURATION = 0.5        # seconds (keep short pathological utterances)
 MIN_RMS = 0.005           # silence threshold
-TOP_DB = 25               # silence trimming aggressiveness
-N_MFCC = 40
-MAX_LEN = 200             # MFCC time frames
+
+TOP_DB = 35               # softer trimming for dysarthria
+N_MFCC = 40               # base MFCC count
+MAX_LEN = 200             # time frames after padding
+
+# Final feature dimension = 40 MFCC + Δ + ΔΔ = 120
+
 
 # ================= BANDPASS FILTER =================
-def bandpass_filter(signal, sr, low=80, high=8000):
+def bandpass_filter(signal, sr, low=50, high=7500):
     """
-    Speech-safe bandpass filter with Nyquist protection
+    Speech-aware bandpass filter.
+    Keeps breathiness, tremor, and hoarseness.
     """
     nyq = 0.5 * sr
 
-    # Safety clamp
     low = max(low, 20)
     high = min(high, nyq * 0.99)
 
     if low >= high:
-        return signal  # skip filtering safely
+        return signal
 
     b, a = butter(
         4,
@@ -33,16 +38,18 @@ def bandpass_filter(signal, sr, low=80, high=8000):
     )
     return lfilter(b, a, signal)
 
+
 # ================= SILENCE CHECK =================
 def is_too_silent(signal):
     rms = np.sqrt(np.mean(signal ** 2))
     return rms < MIN_RMS
 
+
 # ================= PREPROCESS AUDIO =================
 def preprocess_audio(audio_path, delete_if_silent=False):
     """
-    Loads and conditions audio in memory.
-    Deletes file ONLY if delete_if_silent=True and audio is invalid.
+    Loads and lightly conditions audio.
+    DOES NOT over-clean (important for medical speech).
     """
 
     try:
@@ -53,7 +60,7 @@ def preprocess_audio(audio_path, delete_if_silent=False):
             os.remove(audio_path)
         return None
 
-    # Trim leading & trailing silence
+    # Trim leading & trailing silence (gentle)
     signal, _ = librosa.effects.trim(signal, top_db=TOP_DB)
 
     # Duration check
@@ -69,43 +76,59 @@ def preprocess_audio(audio_path, delete_if_silent=False):
             os.remove(audio_path)
         return None
 
-    # Band-pass filtering
+    # Speech-aware band-pass
     signal = bandpass_filter(signal, sr)
 
-    # Loudness normalization
+    # Loudness normalization (file-level)
     signal = librosa.util.normalize(signal)
 
     return signal, sr
 
+
 # ================= FEATURE EXTRACTION =================
 def extract_mfcc(signal, sr):
     """
-    Extracts MFCC features and pads/truncates to fixed length
+    Extracts MFCC + Δ + ΔΔ features.
+    Final shape: (120, MAX_LEN)
     """
+
+    # Base MFCCs
     mfcc = librosa.feature.mfcc(
         y=signal,
         sr=sr,
         n_mfcc=N_MFCC
     )
 
+    # Temporal derivatives (CRITICAL for dysarthria)
+    delta = librosa.feature.delta(mfcc)
+    delta2 = librosa.feature.delta(mfcc, order=2)
+
+    # Stack features
+    features = np.vstack([mfcc, delta, delta2])  # (120, time)
+
     # Pad or truncate time dimension
-    if mfcc.shape[1] < MAX_LEN:
-        pad_width = MAX_LEN - mfcc.shape[1]
-        mfcc = np.pad(mfcc, ((0, 0), (0, pad_width)))
+    if features.shape[1] < MAX_LEN:
+        pad_width = MAX_LEN - features.shape[1]
+        features = np.pad(
+            features,
+            ((0, 0), (0, pad_width)),
+            mode="constant"
+        )
     else:
-        mfcc = mfcc[:, :MAX_LEN]
+        features = features[:, :MAX_LEN]
 
-    return mfcc
+    return features
 
-# ================= SAVE FILTERED AUDIO (LISTENING ONLY) =================
+
+# ================= SAVE FILTERED AUDIO (DEBUG ONLY) =================
 def save_filtered_audio(
     input_path,
     output_root="data/audio_filtered",
     preserve_structure=True
 ):
     """
-    Saves a filtered copy of audio for listening/debugging ONLY.
-    Does NOT overwrite original dataset.
+    Saves a filtered copy for listening/debugging.
+    Does NOT overwrite training data.
     """
 
     result = preprocess_audio(input_path, delete_if_silent=False)
@@ -116,7 +139,6 @@ def save_filtered_audio(
     signal, sr = result
 
     if preserve_structure:
-        # Preserve folder structure from data/audio
         rel_path = input_path.replace("data/audio/", "")
         output_path = os.path.join(output_root, rel_path)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
