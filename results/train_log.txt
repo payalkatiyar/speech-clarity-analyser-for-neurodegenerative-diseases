@@ -1,0 +1,37 @@
+🚀 Using device: mps
+📦 Loading cached labels from data/.cache/labels/labels_5dac067a92eb725233afcb187efa1cee.json
+✅ Loaded 7737 samples (augment=False)
+📦 Loading cached labels from data/.cache/labels/labels_5dac067a92eb725233afcb187efa1cee.json
+✅ Loaded 7737 samples (augment=True)
+📦 Loading cached labels from data/.cache/labels/labels_5dac067a92eb725233afcb187efa1cee.json
+✅ Loaded 7737 samples (augment=False)
+📊 Speaker split — train spk: 9, val spk: 2 | samples train: 5934, val: 1803
+🧠 Model: 115,778 trainable params (115,778 total)
+Epoch [1/45] Train: 0.0730 | Val: 0.0193 | MAE: 0.1400 | Acc±0.18: 60.8% | LR: 0.000333
+  💾 Best model saved (val Acc±0.18=60.8%, MAE=0.1400)
+Epoch [2/45] Train: 0.0565 | Val: 0.0140 | MAE: 0.1128 | Acc±0.18: 77.6% | LR: 0.000667
+  💾 Best model saved (val Acc±0.18=77.6%, MAE=0.1128)
+Epoch [3/45] Train: 0.0510 | Val: 0.0117 | MAE: 0.1078 | Acc±0.18: 83.6% | LR: 0.001000
+  💾 Best model saved (val Acc±0.18=83.6%, MAE=0.1078)
+Epoch [4/45] Train: 0.0493 | Val: 0.0147 | MAE: 0.1244 | Acc±0.18: 73.5% | LR: 0.001000
+Epoch [5/45] Train: 0.0454 | Val: 0.0096 | MAE: 0.0993 | Acc±0.18: 91.1% | LR: 0.000999
+  💾 Best model saved (val Acc±0.18=91.1%, MAE=0.0993)
+Epoch [6/45] Train: 0.0426 | Val: 0.0088 | MAE: 0.0933 | Acc±0.18: 93.1% | LR: 0.000994
+  💾 Best model saved (val Acc±0.18=93.1%, MAE=0.0933)
+Epoch [7/45] Train: 0.0425 | Val: 0.0107 | MAE: 0.1047 | Acc±0.18: 86.2% | LR: 0.000987
+Epoch [8/45] Train: 0.0399 | Val: 0.0090 | MAE: 0.0961 | Acc±0.18: 92.4% | LR: 0.000978
+Epoch [9/45] Train: 0.0384 | Val: 0.0096 | MAE: 0.0953 | Acc±0.18: 87.7% | LR: 0.000965
+Epoch [10/45] Train: 0.0362 | Val: 0.0088 | MAE: 0.0911 | Acc±0.18: 90.1% | LR: 0.000951
+Epoch [11/45] Train: 0.0353 | Val: 0.0083 | MAE: 0.0910 | Acc±0.18: 92.6% | LR: 0.000933
+Epoch [12/45] Train: 0.0328 | Val: 0.0096 | MAE: 0.0980 | Acc±0.18: 88.0% | LR: 0.000913
+Epoch [13/45] Train: 0.0324 | Val: 0.0078 | MAE: 0.0876 | Acc±0.18: 93.0% | LR: 0.000891
+Epoch [14/45] Train: 0.0303 | Val: 0.0120 | MAE: 0.1066 | Acc±0.18: 78.1% | LR: 0.000867
+Epoch [15/45] Train: 0.0306 | Val: 0.0110 | MAE: 0.0997 | Acc±0.18: 81.3% | LR: 0.000840
+Epoch [16/45] Train: 0.0285 | Val: 0.0086 | MAE: 0.0905 | Acc±0.18: 89.5% | LR: 0.000812
+
+⏹ Early stopping at epoch 16 (no Acc±0.18 improvement for 10 epochs)
+
+📈 Training history saved to training_history.json
+
+✅ Training complete. Best val Acc±0.18: 93.1%
+📐 Linear calibration fit on val (n=1803): y ≈ 1.1197 * x + -0.0679

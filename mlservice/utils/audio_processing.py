@@ -120,6 +120,90 @@ def extract_mfcc(signal, sr):
     return features
 
 
+# ================= CLARITY FEATURE EXTRACTION =================
+def extract_clarity_features(signal, sr):
+    """
+    Extracts audio-level features that correlate with speech clarity.
+    Returns a dict of feature values used for label generation.
+    """
+
+    features = {}
+
+    # --- Zero Crossing Rate ---
+    zcr = librosa.feature.zero_crossing_rate(signal)
+    features["zcr_mean"] = float(np.mean(zcr))
+    features["zcr_std"] = float(np.std(zcr))
+
+    # --- Spectral Centroid (brightness indicator) ---
+    centroid = librosa.feature.spectral_centroid(y=signal, sr=sr)
+    features["centroid_mean"] = float(np.mean(centroid))
+    features["centroid_std"] = float(np.std(centroid))
+
+    # --- Spectral Rolloff ---
+    rolloff = librosa.feature.spectral_rolloff(y=signal, sr=sr)
+    features["rolloff_mean"] = float(np.mean(rolloff))
+
+    # --- RMS Energy ---
+    rms = librosa.feature.rms(y=signal)
+    features["rms_mean"] = float(np.mean(rms))
+    features["rms_std"] = float(np.std(rms))
+
+    # --- Spectral Bandwidth ---
+    bandwidth = librosa.feature.spectral_bandwidth(y=signal, sr=sr)
+    features["bandwidth_mean"] = float(np.mean(bandwidth))
+
+    # --- Spectral Flatness (noise-like vs tonal) ---
+    flatness = librosa.feature.spectral_flatness(y=signal)
+    features["flatness_mean"] = float(np.mean(flatness))
+
+    # --- HNR approximation (simpler/faster without HPSS) ---
+    # use spectral flatness as a proxy for tonality/noise ratio
+    features["hnr_proxy"] = float(1.0 - np.mean(flatness))
+
+    # --- Duration ---
+    features["duration"] = float(librosa.get_duration(y=signal, sr=sr))
+
+    # --- Pitch stability (fast autocorrelation) ---
+    try:
+        # Use autocorrelation for fast pitch estimation
+        frame_length = int(0.03 * sr)  # 30ms frames
+        hop = int(0.01 * sr)  # 10ms hop
+        f0_values = []
+
+        for start in range(0, len(signal) - frame_length, hop):
+            frame = signal[start:start + frame_length]
+            if np.max(np.abs(frame)) < 0.01:
+                continue
+            # Autocorrelation
+            corr = np.correlate(frame, frame, mode='full')
+            corr = corr[len(corr)//2:]
+            # Find first peak after initial decline
+            min_lag = int(sr / 500)  # max 500 Hz
+            max_lag = int(sr / 50)   # min 50 Hz
+            if max_lag > len(corr):
+                continue
+            segment = corr[min_lag:max_lag]
+            if len(segment) > 0 and np.max(segment) > 0.3 * corr[0]:
+                peak_idx = np.argmax(segment) + min_lag
+                f0_values.append(sr / peak_idx)
+
+        if len(f0_values) > 2:
+            f0_arr = np.array(f0_values)
+            features["f0_mean"] = float(np.mean(f0_arr))
+            features["f0_std"] = float(np.std(f0_arr))
+            features["voiced_ratio"] = float(len(f0_values) / max(1, len(signal) // hop))
+        else:
+            features["f0_mean"] = 0.0
+            features["f0_std"] = 0.0
+            features["voiced_ratio"] = 0.0
+    except Exception:
+        features["f0_mean"] = 0.0
+        features["f0_std"] = 0.0
+        features["voiced_ratio"] = 0.0
+
+    return features
+
+
 # ================= SAVE FILTERED AUDIO (DEBUG ONLY) =================
 def save_filtered_audio(
     input_path,

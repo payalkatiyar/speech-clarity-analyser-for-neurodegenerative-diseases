@@ -1,52 +1,105 @@
-import librosa
 import numpy as np
-import os
+import librosa
 
-def raw_clarity_score(label, session_name, audio_path):
+from mlservice.utils.audio_processing import preprocess_audio, extract_clarity_features
+
+
+def raw_clarity_score(label, session, audio_path, signal=None, sr=None):
     """
-    Step 1: Raw clarity estimate (NOT normalized)
+    Compute a clarity score that is ~70% audio-derived, ~30% prior.
+    Returns a float typically in [0.0, 1.2] range (clipped later by normalization).
     """
 
-    # ---- Base score by speaker type + session ----
-    if label == "normal":
-        base = 0.9
-    else:
-        session = session_name.lower()
-        if "session1" in session:
-            base = 0.75
-        elif "session2" in session:
-            base = 0.55
-        elif "session3" in session:
-            base = 0.35
-        else:
-            base = 0.30
+    # ---------- Prior component (30%) ----------
+    base = 0.85 if label == "normal" else 0.50
 
-    # ---- Utterance-level variation ----
+    session_penalty = {
+        "session1": 0.0,
+        "session2": -0.10,
+        "session3": -0.20
+    }.get(session.lower(), 0.0)
+
+    prior_score = base + session_penalty  # range ~[0.30, 0.85]
+
+    # ---------- Audio-derived component (70%) ----------
     try:
-        y, sr = librosa.load(audio_path, sr=16000)
-        duration = librosa.get_duration(y=y, sr=sr)
-        rms = np.sqrt(np.mean(y**2))
+        if signal is None or sr is None:
+            result = preprocess_audio(audio_path)
+            if result is None:
+                # Fallback: use only prior
+                return float(np.clip(prior_score, 0.0, 1.0))
+            signal, sr = result
+        
+        feats = extract_clarity_features(signal, sr)
+    except Exception:
+        return float(np.clip(prior_score, 0.0, 1.0))
 
-        duration_factor = np.clip(duration / 5.0, 0.8, 1.2)
-        rms_factor = np.clip(rms / 0.05, 0.8, 1.2)
+    # Individual sub-scores, each normalized to ~[0, 1]
 
-        base *= 0.6 * duration_factor + 0.4 * rms_factor
-    except:
-        pass
+    # 1. HNR proxy: higher = clearer speech. Typical range [0, 1]
+    hnr_score = np.clip(feats.get("hnr_proxy", 0.5), 0, 1)
 
-    return float(base)
+    # 2. Voiced ratio: higher = more voiced frames = clearer
+    voiced_score = np.clip(feats["voiced_ratio"], 0, 1)
+
+    # 3. F0 stability: lower std relative to mean = more stable = clearer
+    if feats["f0_mean"] > 0:
+        f0_cv = feats["f0_std"] / (feats["f0_mean"] + 1e-6)
+        f0_score = np.clip(1.0 - f0_cv, 0, 1)
+    else:
+        f0_score = 0.3  # no pitch detected = likely impaired
+
+    # 4. RMS energy consistency: lower std = more stable energy = clearer
+    if feats["rms_mean"] > 0:
+        rms_cv = feats["rms_std"] / (feats["rms_mean"] + 1e-6)
+        rms_score = np.clip(1.0 - rms_cv * 2, 0, 1)
+    else:
+        rms_score = 0.3
+
+    # 5. Spectral flatness: lower = more tonal/harmonic = clearer speech
+    flatness_score = np.clip(1.0 - feats["flatness_mean"] * 10, 0, 1)
+
+    # 6. Duration: very short utterances are suspicious
+    dur_score = np.clip(feats["duration"] / 3.0, 0, 1)
+
+    # 7. Spectral centroid: moderate range is normal speech (~1000-3000 Hz)
+    centroid_norm = feats["centroid_mean"] / (8000 / 2)  # normalize by Nyquist/2
+    centroid_score = np.clip(1.0 - abs(centroid_norm - 0.4) * 2, 0, 1)
+
+    # Weighted audio score
+    audio_score = (
+        0.25 * hnr_score +
+        0.20 * voiced_score +
+        0.15 * f0_score +
+        0.15 * rms_score +
+        0.10 * flatness_score +
+        0.08 * dur_score +
+        0.07 * centroid_score
+    )
+
+    # Combine: 30% prior + 70% audio
+    combined = 0.30 * prior_score + 0.70 * audio_score
+
+    return float(combined)
 
 
 def normalize_scores_within_speaker(scores):
     """
-    Min-max normalize clarity scores for ONE speaker
+    Min-max normalization within speaker.
+    Fixed edge cases: constant scores → 0.5, not 0.0.
     """
-    scores = np.array(scores)
+    scores = np.array(scores, dtype=np.float64)
 
-    min_s = scores.min()
-    max_s = scores.max()
+    if len(scores) < 2:
+        # Single sample: use raw score clipped to [0, 1]
+        return np.clip(scores, 0, 1)
 
-    if max_s - min_s < 1e-6:
-        return np.ones_like(scores) * 0.5  # fallback
+    min_s = np.min(scores)
+    max_s = np.max(scores)
 
-    return (scores - min_s) / (max_s - min_s)
+    if max_s - min_s < 1e-8:
+        # All scores identical → neutral value 0.5
+        return np.full_like(scores, 0.5)
+
+    norm = (scores - min_s) / (max_s - min_s)
+    return np.clip(norm, 0, 1)
